@@ -30,6 +30,7 @@ Kiosk is a **multi-guild Discord marketplace bot** that lets server admins creat
 - **Ephemeral order wizard** — the entire ordering flow is private to the customer
 - **Stripe Checkout** — secure one-time payments with automatic webhook handling
 - **Discount coupons** — percentage or fixed amount, with optional expiry, usage limits, and per-service restrictions
+- **Staff system** — application form, role-based access with category assignments, team management
 - **Analytics dashboard** — revenue, top services, top customers, status breakdown, and daily revenue trend chart
 - **Admin order management** — accept, complete, or cancel & refund orders with one click
 - **Customer DMs** — automatic status updates on payment, acceptance, completion, and refunds
@@ -128,6 +129,18 @@ https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=214753
 | `/coupon-list` | List all coupons with usage stats | Manage Server |
 | `/coupon-delete` | Delete a coupon by code | Manage Server |
 
+### Staff
+
+| Command | Description | Permission |
+|---------|-------------|------------|
+| `/staff-setup` | Post an application embed with "Apply Now" button in a channel | Manage Server |
+| `/staff-roles create` | Create a staff role with category-based access | Manage Server |
+| `/staff-roles list` | View all staff roles | Manage Server |
+| `/staff-roles delete` | Delete a staff role | Manage Server |
+| `/staff-list show` | View all staff members and their roles | Manage Server |
+| `/staff-list remove` | Remove a staff member | Manage Server |
+| `/my-assignments` | View your own staff role and assigned categories | Staff |
+
 ### Analytics
 
 | Command | Description | Permission |
@@ -144,9 +157,22 @@ https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=214753
 6. Clicks **Pay Now** → redirected to Stripe Checkout (or instant for free orders)
 7. Receives a **DM** when payment is confirmed
 
+## Staff System
+
+Kiosk includes a built-in staff recruitment and role-based access system:
+
+1. **Create roles** — `/staff-roles create name:Booster categories:Gaming` maps a role to specific service categories
+2. **Post application** — `/staff-setup #apply` drops an embed with an "Apply Now" button
+3. **Applicants fill a form** — about themselves, experience, availability, and motivation
+4. **Review in orders channel** — applications appear with Accept/Reject buttons
+5. **On accept** — admin picks a role to assign, applicant gets a DM and is added to staff
+6. **Staff can manage orders** — Accept, Complete, and Refund orders within their assigned categories
+7. **Self-service** — staff use `/my-assignments` to see their role and categories
+
 ## Order Management
 
 - Orders appear in the admin orders channel with **Accept & Start** and **Cancel & Refund** buttons
+- Both admins and staff (with matching category access) can manage orders
 - Status transitions: `pending_payment` → `paid` → `in_progress` → `completed`
 - Refunds are processed through Stripe automatically
 
@@ -174,12 +200,12 @@ src/
 ├── bot/
 │   ├── client.ts             # Discord client + event routing
 │   ├── deploy-commands.ts    # Slash command registration
-│   ├── commands/             # 11 slash commands
+│   ├── commands/             # 15 slash commands
 │   ├── interactions/         # Button, select menu, modal handlers
 │   └── embeds/               # Embed builders
 ├── server/
 │   └── webhooks/stripe.ts    # Fastify + Stripe webhook handler
-├── services/                 # Business logic (orders, services, coupons, analytics, Stripe)
+├── services/                 # Business logic (orders, services, coupons, staff, analytics, Stripe)
 ├── db/                       # Supabase client, schema, types
 └── utils/                    # Constants, permissions, logger
 ```
