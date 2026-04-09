@@ -1,0 +1,30 @@
+import type { ChatInputCommandInteraction, SharedSlashCommand } from 'discord.js';
+
+import * as setup from './setup.js';
+import * as serviceCreate from './service-create.js';
+import * as serviceList from './service-list.js';
+import * as serviceEdit from './service-edit.js';
+import * as serviceDelete from './service-delete.js';
+import * as servicePublish from './service-publish.js';
+import * as orders from './orders.js';
+
+export interface Command {
+  data: SharedSlashCommand;
+  execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
+}
+
+export const commands = new Map<string, Command>();
+
+const allCommands: Command[] = [
+  setup,
+  serviceCreate,
+  serviceList,
+  serviceEdit,
+  serviceDelete,
+  servicePublish,
+  orders,
+];
+
+for (const cmd of allCommands) {
+  commands.set(cmd.data.name, cmd);
+}
