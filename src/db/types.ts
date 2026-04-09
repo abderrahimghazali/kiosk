@@ -69,6 +69,40 @@ export interface Order {
   updated_at: string;
 }
 
+export interface StaffRole {
+  id: string;
+  guild_id: string;
+  name: string;
+  categories: string[];
+  created_at: string;
+}
+
+export interface StaffMember {
+  id: string;
+  guild_id: string;
+  user_id: string;
+  role_id: string;
+  joined_at: string;
+}
+
+export interface ApplicationResponse {
+  question: string;
+  answer: string;
+}
+
+export interface StaffApplication {
+  id: string;
+  guild_id: string;
+  user_id: string;
+  username: string;
+  responses: ApplicationResponse[];
+  status: 'pending' | 'accepted' | 'rejected';
+  reviewed_by: string | null;
+  assigned_role_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Coupon {
   id: string;
   guild_id: string;

@@ -33,6 +33,13 @@ import {
   handleRemoveCoupon,
 } from './order-wizard.js';
 import { handleAdminAccept, handleAdminComplete, handleAdminCancel } from './admin-actions.js';
+import {
+  handleApplyButton,
+  handleApplyModal,
+  handleAcceptApplication,
+  handleRejectApplication,
+  handleRoleSelect,
+} from './staff-application.js';
 import { logger } from '../../utils/logger.js';
 
 export async function handleInteraction(interaction: Interaction) {
@@ -55,6 +62,14 @@ export async function handleInteraction(interaction: Interaction) {
           return handleCouponButton(interaction);
         case CUSTOM_ID.ORDER_REMOVE_COUPON:
           return handleRemoveCoupon(interaction);
+
+        // Staff application
+        case CUSTOM_ID.STAFF_APPLY_BTN:
+          return handleApplyButton(interaction);
+        case CUSTOM_ID.STAFF_APP_ACCEPT:
+          return handleAcceptApplication(interaction);
+        case CUSTOM_ID.STAFF_APP_REJECT:
+          return handleRejectApplication(interaction);
 
         // Admin actions
         case CUSTOM_ID.ADMIN_ACCEPT:
@@ -101,6 +116,8 @@ export async function handleInteraction(interaction: Interaction) {
           return handleVariantSelect(interaction);
         case CUSTOM_ID.ORDER_STEP_SELECT:
           return handleStepSelect(interaction);
+        case CUSTOM_ID.STAFF_APP_ROLE_SELECT:
+          return handleRoleSelect(interaction);
       }
     }
 
@@ -127,6 +144,8 @@ export async function handleInteraction(interaction: Interaction) {
           return handleStepTextModal(interaction);
         case CUSTOM_ID.ORDER_COUPON_MODAL:
           return handleCouponModal(interaction);
+        case CUSTOM_ID.STAFF_APPLY_MODAL:
+          return handleApplyModal(interaction);
       }
     }
   } catch (err) {

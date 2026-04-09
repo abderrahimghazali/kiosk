@@ -34,6 +34,13 @@ export const CUSTOM_ID = {
   ORDER_COUPON_MODAL: 'order_coupon_modal',
   ORDER_REMOVE_COUPON: 'order_remove_coupon',
 
+  // Staff application
+  STAFF_APPLY_BTN: 'staff_apply_btn',
+  STAFF_APPLY_MODAL: 'staff_apply_modal',
+  STAFF_APP_ACCEPT: 'staff_app_accept',
+  STAFF_APP_REJECT: 'staff_app_reject',
+  STAFF_APP_ROLE_SELECT: 'staff_app_role_select',
+
   // Catalog
   CATALOG_CATEGORY: 'catalog_category',
 

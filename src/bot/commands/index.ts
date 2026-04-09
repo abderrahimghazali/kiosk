@@ -11,6 +11,10 @@ import * as analytics from './analytics.js';
 import * as couponCreate from './coupon-create.js';
 import * as couponList from './coupon-list.js';
 import * as couponDelete from './coupon-delete.js';
+import * as staffSetup from './staff-setup.js';
+import * as staffRoles from './staff-roles.js';
+import * as staffList from './staff-list.js';
+import * as myAssignments from './my-assignments.js';
 
 export interface Command {
   data: SharedSlashCommand;
@@ -31,6 +35,10 @@ const allCommands: Command[] = [
   couponCreate,
   couponList,
   couponDelete,
+  staffSetup,
+  staffRoles,
+  staffList,
+  myAssignments,
 ];
 
 for (const cmd of allCommands) {

@@ -5,32 +5,45 @@ import { getGuildConfig } from '../../services/guild.service.js';
 import { createRefund } from '../../services/stripe.service.js';
 import { buildOrderAdminEmbed, buildOrderAdminButtons } from '../embeds/order-embed.js';
 import { buildStatusUpdateEmbed } from '../embeds/status-embed.js';
-import { isAdmin } from '../../utils/permissions.js';
+import { isAdminOrStaffForCategory } from '../../utils/permissions.js';
 import { ORDER_STATUS } from '../../utils/constants.js';
 import { logger } from '../../utils/logger.js';
 
-// Fix #20: Validate order belongs to the current guild
 function validateOrderGuild(order: { guild_id: string }, guildId: string): boolean {
   return order.guild_id === guildId;
 }
 
+/** Check permission: admin or staff for the order's service category */
+async function checkOrderPermission(interaction: ButtonInteraction, orderId: string) {
+  const order = await getOrder(orderId);
+  if (!order || !validateOrderGuild(order, interaction.guildId!)) return { order: null, service: null };
+
+  const service = await getService(order.service_id);
+  const category = service?.category || 'General';
+
+  const allowed = await isAdminOrStaffForCategory(interaction, category);
+  if (!allowed) return { order: null, service: null };
+
+  return { order, service };
+}
+
 export async function handleAdminAccept(interaction: ButtonInteraction) {
-  if (!isAdmin(interaction)) {
-    await interaction.reply({ content: "You don't have permission.", ephemeral: true });
+  const orderId = interaction.customId.split(':')[1];
+
+  // Peek at order to check permission before deferring
+  const { order, service } = await checkOrderPermission(interaction, orderId);
+  if (!order) {
+    await interaction.reply({ content: "You don't have permission or order not found.", ephemeral: true });
+    return;
+  }
+  if (order.status !== ORDER_STATUS.PAID) {
+    await interaction.reply({ content: 'Order cannot be accepted in its current state.', ephemeral: true });
     return;
   }
 
-  const orderId = interaction.customId.split(':')[1];
   await interaction.deferUpdate();
 
-  const order = await getOrder(orderId);
-  if (!order || !validateOrderGuild(order, interaction.guildId!) || order.status !== ORDER_STATUS.PAID) {
-    await interaction.followUp({ content: 'Order cannot be accepted in its current state.', ephemeral: true });
-    return;
-  }
-
   const updated = await updateOrder(orderId, { status: ORDER_STATUS.IN_PROGRESS });
-  const service = await getService(updated.service_id);
 
   const embed = buildOrderAdminEmbed(updated, service?.name || 'Unknown');
   const buttons = buildOrderAdminButtons(updated);
@@ -53,22 +66,21 @@ export async function handleAdminAccept(interaction: ButtonInteraction) {
 }
 
 export async function handleAdminComplete(interaction: ButtonInteraction) {
-  if (!isAdmin(interaction)) {
-    await interaction.reply({ content: "You don't have permission.", ephemeral: true });
+  const orderId = interaction.customId.split(':')[1];
+
+  const { order, service } = await checkOrderPermission(interaction, orderId);
+  if (!order) {
+    await interaction.reply({ content: "You don't have permission or order not found.", ephemeral: true });
+    return;
+  }
+  if (order.status !== ORDER_STATUS.IN_PROGRESS) {
+    await interaction.reply({ content: 'Order cannot be completed in its current state.', ephemeral: true });
     return;
   }
 
-  const orderId = interaction.customId.split(':')[1];
   await interaction.deferUpdate();
 
-  const order = await getOrder(orderId);
-  if (!order || !validateOrderGuild(order, interaction.guildId!) || order.status !== ORDER_STATUS.IN_PROGRESS) {
-    await interaction.followUp({ content: 'Order cannot be completed in its current state.', ephemeral: true });
-    return;
-  }
-
   const updated = await updateOrder(orderId, { status: ORDER_STATUS.COMPLETED });
-  const service = await getService(updated.service_id);
 
   const embed = buildOrderAdminEmbed(updated, service?.name || 'Unknown');
   await interaction.editReply({ embeds: [embed], components: [] });
@@ -86,23 +98,21 @@ export async function handleAdminComplete(interaction: ButtonInteraction) {
   }
 }
 
-// Fix #4: Refund failure now stops the status update
 export async function handleAdminCancel(interaction: ButtonInteraction) {
-  if (!isAdmin(interaction)) {
-    await interaction.reply({ content: "You don't have permission.", ephemeral: true });
+  const orderId = interaction.customId.split(':')[1];
+
+  const { order, service } = await checkOrderPermission(interaction, orderId);
+  if (!order) {
+    await interaction.reply({ content: "You don't have permission or order not found.", ephemeral: true });
+    return;
+  }
+  if (order.status !== ORDER_STATUS.PAID && order.status !== ORDER_STATUS.IN_PROGRESS) {
+    await interaction.reply({ content: 'Order cannot be cancelled/refunded in its current state.', ephemeral: true });
     return;
   }
 
-  const orderId = interaction.customId.split(':')[1];
   await interaction.deferUpdate();
 
-  const order = await getOrder(orderId);
-  if (!order || !validateOrderGuild(order, interaction.guildId!) || (order.status !== ORDER_STATUS.PAID && order.status !== ORDER_STATUS.IN_PROGRESS)) {
-    await interaction.followUp({ content: 'Order cannot be cancelled/refunded in its current state.', ephemeral: true });
-    return;
-  }
-
-  // Process Stripe refund — abort if it fails
   if (order.stripe_payment_intent_id) {
     try {
       const guildConfig = await getGuildConfig(order.guild_id);
@@ -115,12 +125,11 @@ export async function handleAdminCancel(interaction: ButtonInteraction) {
         content: 'Stripe refund failed. Order status unchanged. Please process the refund manually in Stripe Dashboard.',
         ephemeral: true,
       });
-      return; // Do NOT update status if refund failed
+      return;
     }
   }
 
   const updated = await updateOrder(orderId, { status: ORDER_STATUS.REFUNDED });
-  const service = await getService(updated.service_id);
 
   const embed = buildOrderAdminEmbed(updated, service?.name || 'Unknown');
   await interaction.editReply({ embeds: [embed], components: [] });
