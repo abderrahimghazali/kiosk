@@ -26,6 +26,10 @@ export function buildOrderAdminEmbed(order: Order, serviceName: string): EmbedBu
     )
     .setTimestamp(new Date(order.created_at));
 
+  if (order.discount_amount > 0) {
+    embed.addFields({ name: 'Discount Applied', value: `-${formatPrice(order.discount_amount, order.currency)}`, inline: true });
+  }
+
   // Step responses
   if (order.step_responses.length > 0) {
     const responses = order.step_responses

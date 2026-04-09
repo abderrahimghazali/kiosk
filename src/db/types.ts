@@ -63,6 +63,22 @@ export interface Order {
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   order_admin_message_id: string | null;
+  coupon_id: string | null;
+  discount_amount: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Coupon {
+  id: string;
+  guild_id: string;
+  code: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  max_uses: number | null;
+  times_used: number;
+  service_id: string | null;
+  expires_at: string | null;
+  is_active: boolean;
+  created_at: string;
 }

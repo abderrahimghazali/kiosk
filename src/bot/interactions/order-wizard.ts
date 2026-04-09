@@ -33,7 +33,10 @@ interface WizardState {
   currentStepIndex: number;
   stepResponses: StepResponse[];
   createdAt: number;
-  paying: boolean; // Fix #1: guard against double-click
+  paying: boolean;
+  couponId: string | null;
+  couponCode: string | null;
+  discountAmount: number;
 }
 
 const wizards = new Map<string, WizardState>();
@@ -89,6 +92,9 @@ async function startOrderWizard(
     stepResponses: [],
     createdAt: Date.now(),
     paying: false,
+    couponId: null,
+    couponCode: null,
+    discountAmount: 0,
   });
 
   await interaction.deferReply({ ephemeral: true });
@@ -303,17 +309,28 @@ export async function handleStepSelect(interaction: StringSelectMenuInteraction)
   }
 }
 
-// Show order summary
+// Show order summary with coupon support
 async function showOrderSummary(interaction: ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction, key: string) {
   const state = wizards.get(key)!;
+  const finalPrice = state.variantPrice - state.discountAmount;
 
   const embed = new EmbedBuilder()
     .setTitle(`Order Summary: ${state.serviceName}`)
-    .setColor(COLORS.WARNING)
-    .addFields(
+    .setColor(COLORS.WARNING);
+
+  if (state.discountAmount > 0) {
+    embed.addFields(
+      { name: 'Variant', value: state.variantName, inline: true },
+      { name: 'Original Price', value: formatPrice(state.variantPrice, state.currency), inline: true },
+      { name: 'Discount', value: `-${formatPrice(state.discountAmount, state.currency)} (${state.couponCode})`, inline: true },
+      { name: 'Total', value: `**${formatPrice(finalPrice, state.currency)}**`, inline: true }
+    );
+  } else {
+    embed.addFields(
       { name: 'Variant', value: state.variantName, inline: true },
       { name: 'Price', value: formatPrice(state.variantPrice, state.currency), inline: true }
     );
+  }
 
   if (state.stepResponses.length > 0) {
     const responses = state.stepResponses
@@ -324,10 +341,26 @@ async function showOrderSummary(interaction: ButtonInteraction | StringSelectMen
 
   embed.setFooter({ text: 'Review your order and click Pay to proceed' });
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  // Coupon row
+  const couponRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    state.couponId
+      ? new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.ORDER_REMOVE_COUPON}:${state.serviceId}`)
+          .setLabel(`Remove Coupon (${state.couponCode})`)
+          .setEmoji('🏷️')
+          .setStyle(ButtonStyle.Secondary)
+      : new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.ORDER_COUPON_BTN}:${state.serviceId}`)
+          .setLabel('Apply Coupon')
+          .setEmoji('🏷️')
+          .setStyle(ButtonStyle.Secondary)
+  );
+
+  // Pay/cancel row
+  const payRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`${CUSTOM_ID.ORDER_PAY}:${state.serviceId}`)
-      .setLabel('Pay Now')
+      .setLabel(finalPrice === 0 ? 'Place Order (Free)' : 'Pay Now')
       .setEmoji('✅')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
@@ -337,7 +370,7 @@ async function showOrderSummary(interaction: ButtonInteraction | StringSelectMen
       .setStyle(ButtonStyle.Danger)
   );
 
-  await interaction.editReply({ embeds: [embed], components: [row] });
+  await interaction.editReply({ embeds: [embed], components: [couponRow, payRow] });
 }
 
 // Fix #1: Handle pay button with double-click guard
@@ -364,6 +397,8 @@ export async function handlePay(interaction: ButtonInteraction) {
     const guildConfig = await getGuildConfig(state.guildId);
     if (!guildConfig) throw new Error('Guild not configured');
 
+    const finalPrice = state.variantPrice - state.discountAmount;
+
     const order = await createOrder({
       guild_id: state.guildId,
       service_id: state.serviceId,
@@ -372,22 +407,48 @@ export async function handlePay(interaction: ButtonInteraction) {
       customer_discord_username: interaction.user.username,
       selected_variant_name: state.variantName,
       step_responses: state.stepResponses,
-      total_price: state.variantPrice,
+      total_price: finalPrice,
       currency: state.currency,
+      coupon_id: state.couponId,
+      discount_amount: state.discountAmount,
     });
+
+    // Record coupon usage
+    if (state.couponId) {
+      const { recordCouponUsage } = await import('../../services/coupon.service.js');
+      await recordCouponUsage(state.couponId, order.id, interaction.user.id, state.discountAmount);
+    }
+
+    // Free order (100% discount) — skip Stripe
+    if (finalPrice === 0) {
+      await updateOrder(order.id, { status: 'paid' });
+      wizards.delete(key);
+
+      const embed = new EmbedBuilder()
+        .setTitle('Order Placed!')
+        .setDescription('Your order is free — no payment needed. The admin has been notified.')
+        .setColor(COLORS.SUCCESS);
+
+      await interaction.editReply({ embeds: [embed], components: [] });
+
+      // Notify admin channel
+      const { notifyAdminOfPaidOrder } = await import('./admin-notify.js');
+      await notifyAdminOfPaidOrder(interaction.client, guildConfig, order);
+
+      logger.info('Free order placed', { orderId: order.id, serviceId });
+      return;
+    }
 
     const session = await createCheckoutSession(guildConfig, {
       serviceName: state.serviceName,
       variantName: state.variantName,
       description: `Order for ${state.serviceName}`,
-      priceInCents: state.variantPrice,
+      priceInCents: finalPrice,
       orderId: order.id,
       customerDiscordId: interaction.user.id,
     });
 
     await updateOrder(order.id, { stripe_checkout_session_id: session.id });
-
-    // Clean up wizard state
     wizards.delete(key);
 
     const embed = new EmbedBuilder()
@@ -406,7 +467,7 @@ export async function handlePay(interaction: ButtonInteraction) {
 
     logger.info('Checkout session created', { orderId: order.id, serviceId });
   } catch (err) {
-    state.paying = false; // Allow retry on failure
+    state.paying = false;
     logger.error('Payment setup failed', { error: String(err) });
     await interaction.editReply({
       content: 'Failed to create payment session. Please try again.',
@@ -414,6 +475,87 @@ export async function handlePay(interaction: ButtonInteraction) {
       components: [],
     });
   }
+}
+
+// Coupon: show modal
+export async function handleCouponButton(interaction: ButtonInteraction) {
+  const serviceId = interaction.customId.split(':')[1];
+  const key = wizardKey(interaction.user.id, serviceId);
+  if (!wizards.has(key)) {
+    await interaction.reply({ content: 'Session expired.', ephemeral: true });
+    return;
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`${CUSTOM_ID.ORDER_COUPON_MODAL}:${serviceId}`)
+    .setTitle('Apply Coupon Code');
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      new TextInputBuilder()
+        .setCustomId('coupon_code')
+        .setLabel('Coupon Code')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(20)
+    )
+  );
+
+  await interaction.showModal(modal);
+}
+
+// Coupon: validate and apply
+export async function handleCouponModal(interaction: ModalSubmitInteraction) {
+  const serviceId = interaction.customId.split(':')[1];
+  const key = wizardKey(interaction.user.id, serviceId);
+  const state = wizards.get(key);
+
+  if (!state) {
+    await interaction.reply({ content: 'Session expired.', ephemeral: true });
+    return;
+  }
+
+  const code = interaction.fields.getTextInputValue('coupon_code').trim();
+
+  const { getCouponByCode, validateCoupon, calculateDiscount } = await import('../../services/coupon.service.js');
+
+  const coupon = await getCouponByCode(state.guildId, code);
+  if (!coupon) {
+    await interaction.reply({ content: 'Invalid coupon code.', ephemeral: true });
+    return;
+  }
+
+  const validation = validateCoupon(coupon, state.serviceId);
+  if (!validation.valid) {
+    await interaction.reply({ content: validation.reason!, ephemeral: true });
+    return;
+  }
+
+  state.couponId = coupon.id;
+  state.couponCode = coupon.code;
+  state.discountAmount = calculateDiscount(coupon, state.variantPrice);
+
+  await interaction.deferUpdate();
+  await showOrderSummary(interaction, key);
+}
+
+// Coupon: remove
+export async function handleRemoveCoupon(interaction: ButtonInteraction) {
+  const serviceId = interaction.customId.split(':')[1];
+  const key = wizardKey(interaction.user.id, serviceId);
+  const state = wizards.get(key);
+
+  if (!state) {
+    await interaction.reply({ content: 'Session expired.', ephemeral: true });
+    return;
+  }
+
+  state.couponId = null;
+  state.couponCode = null;
+  state.discountAmount = 0;
+
+  await interaction.deferUpdate();
+  await showOrderSummary(interaction, key);
 }
 
 // Handle cancel button

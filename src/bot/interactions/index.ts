@@ -28,6 +28,9 @@ import {
   handleStepSelect,
   handlePay,
   handleCancel,
+  handleCouponButton,
+  handleCouponModal,
+  handleRemoveCoupon,
 } from './order-wizard.js';
 import { handleAdminAccept, handleAdminComplete, handleAdminCancel } from './admin-actions.js';
 import { logger } from '../../utils/logger.js';
@@ -48,6 +51,10 @@ export async function handleInteraction(interaction: Interaction) {
           return handlePay(interaction);
         case CUSTOM_ID.ORDER_CANCEL:
           return handleCancel(interaction);
+        case CUSTOM_ID.ORDER_COUPON_BTN:
+          return handleCouponButton(interaction);
+        case CUSTOM_ID.ORDER_REMOVE_COUPON:
+          return handleRemoveCoupon(interaction);
 
         // Admin actions
         case CUSTOM_ID.ADMIN_ACCEPT:
@@ -118,6 +125,8 @@ export async function handleInteraction(interaction: Interaction) {
           return handleAddScreenshotModal(interaction);
         case CUSTOM_ID.ORDER_STEP_TEXT_MODAL:
           return handleStepTextModal(interaction);
+        case CUSTOM_ID.ORDER_COUPON_MODAL:
+          return handleCouponModal(interaction);
       }
     }
   } catch (err) {

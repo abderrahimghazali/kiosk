@@ -7,6 +7,9 @@ import * as serviceEdit from './service-edit.js';
 import * as serviceDelete from './service-delete.js';
 import * as servicePublish from './service-publish.js';
 import * as orders from './orders.js';
+import * as couponCreate from './coupon-create.js';
+import * as couponList from './coupon-list.js';
+import * as couponDelete from './coupon-delete.js';
 
 export interface Command {
   data: SharedSlashCommand;
@@ -23,6 +26,9 @@ const allCommands: Command[] = [
   serviceDelete,
   servicePublish,
   orders,
+  couponCreate,
+  couponList,
+  couponDelete,
 ];
 
 for (const cmd of allCommands) {

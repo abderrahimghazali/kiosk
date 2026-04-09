@@ -29,6 +29,11 @@ export const CUSTOM_ID = {
   SVC_PUBLISH: 'svc_publish',
   SVC_SAVE_DRAFT: 'svc_save_draft',
 
+  // Coupon (order wizard)
+  ORDER_COUPON_BTN: 'order_coupon_btn',
+  ORDER_COUPON_MODAL: 'order_coupon_modal',
+  ORDER_REMOVE_COUPON: 'order_remove_coupon',
+
   // Catalog
   CATALOG_CATEGORY: 'catalog_category',
 

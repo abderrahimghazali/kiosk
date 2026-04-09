@@ -11,6 +11,8 @@ export async function createOrder(data: {
   step_responses: StepResponse[];
   total_price: number;
   currency: string;
+  coupon_id?: string | null;
+  discount_amount?: number;
 }): Promise<Order> {
   const { data: order, error } = await getSupabase()
     .from('orders')
